@@ -106,8 +106,17 @@ const read = (key, fallback) => {
         return fallback;
     }
 };
+const formDraftKey = 'taskboard-form-draft';
 let members = read('taskboard-members', initialMembers);
-let tasks = read('taskboard-tasks', seedTasks);
+let projects = read('taskboard-projects', [
+    { id: 'p1', name: 'Product Launch', description: 'Plan and deliver the next product launch.', color: '#7355e9' },
+]);
+if (!projects.length) projects = [{ id: 'p1', name: 'Product Launch', description: 'Plan and deliver the next product launch.', color: '#7355e9' }];
+members = members.map((member) => ({ ...member, projectIds: member.projectIds || projects.map((project) => project.id) }));
+let tasks = read('taskboard-tasks', seedTasks.map((task) => ({ ...task, projectId: 'p1' })));
+tasks = tasks.map((task) => ({ ...task, projectId: task.projectId || projects[0].id }));
+let selectedProjectId = read('taskboard-selected-project', projects[0].id);
+if (!projects.some((project) => project.id === selectedProjectId)) selectedProjectId = projects[0].id;
 let view = 'board';
 let query = '';
 let filter = 'all';
@@ -135,12 +144,17 @@ const formatDate = (value) =>
 const persist = () => {
     localStorage.setItem('taskboard-tasks', JSON.stringify(tasks));
     localStorage.setItem('taskboard-members', JSON.stringify(members));
+    localStorage.setItem('taskboard-projects', JSON.stringify(projects));
+    localStorage.setItem('taskboard-selected-project', JSON.stringify(selectedProjectId));
 };
+const currentProject = () => projects.find((project) => project.id === selectedProjectId) || projects[0];
+const projectTasks = () => tasks.filter((task) => task.projectId === selectedProjectId);
+const projectMembers = (projectId = selectedProjectId) => members.filter((member) => member.projectIds.includes(projectId));
 function avatar(member, small = false) {
     return `<span class="avatar ${small ? 'avatar-small' : ''}" style="--avatar:${member.color}" title="${esc(member.name)}">${esc(member.initials)}</span>`;
 }
 function filteredTasks() {
-    let result = tasks.filter(
+    let result = projectTasks().filter(
         (task) =>
             task.title.toLowerCase().includes(query.toLowerCase()) ||
             task.category.toLowerCase().includes(query.toLowerCase()),
@@ -239,10 +253,12 @@ function timeline() {
         }</div></section>`;
 }
 function membersView() {
-    return `<section class="view-panel"><div class="view-heading"><div><p class="eyebrow">YOUR TEAM</p><h2>Members <span class="count">${members.length}</span></h2></div><button class="primary-button" id="add-member">＋ Add member</button></div><div class="member-grid">${members
+    const scopedTasks = projectTasks();
+    const scopedMembers = projectMembers();
+    return `<section class="view-panel"><div class="view-heading"><div><p class="eyebrow">YOUR TEAM</p><h2>Members <span class="count">${scopedMembers.length}</span></h2></div><button class="primary-button" id="add-member">＋ Add member</button></div><div class="member-grid">${scopedMembers
         .map(
             (m) =>
-                `<article class="member-card"><div class="member-profile">${avatar(m)}<div><strong>${esc(m.name)}</strong><span>Team member</span></div><button class="icon-button" data-member-delete="${m.id}" aria-label="Remove member">•••</button></div><div class="member-work"><span>Assigned tasks</span><strong>${tasks.filter((t) => t.members.includes(m.id) && t.status !== 'done').length}</strong></div><div class="member-tasks">${tasks
+                `<article class="member-card"><div class="member-profile">${avatar(m)}<div><strong>${esc(m.name)}</strong><span>Team member</span></div><button class="icon-button" data-member-delete="${m.id}" aria-label="Remove member">•••</button></div><div class="member-work"><span>Assigned tasks</span><strong>${scopedTasks.filter((t) => t.members.includes(m.id) && t.status !== 'done').length}</strong></div><div class="member-tasks">${scopedTasks
                     .filter((t) => t.members.includes(m.id))
                     .slice(0, 3)
                     .map(
@@ -256,8 +272,10 @@ function membersView() {
 }
 
 function render() {
-  const visibleCount = tasks.filter(
-    (t) => t.status !== 'done',
+  const activeProject = currentProject();
+  const scopedTasks = projectTasks();
+  const visibleCount = scopedTasks.filter(
+    (t) => t.status !== 'done' && t.status !== 'todo' && t.title.toLowerCase().includes(query.toLowerCase()),
   ).length;
 
   app.innerHTML = `
@@ -312,23 +330,26 @@ function render() {
       </button>
     </header>
 
+    <div class="app-layout">
+      <aside class="project-sidebar" aria-label="Projects">
+        <div class="sidebar-heading"><span>WORKSPACE</span><span class="sidebar-project-count">${projects.length}</span></div>
+        <div class="sidebar-section-label">YOUR PROJECTS</div>
+        <nav class="project-list" aria-label="Select a project">
+          ${projects.map((project) => `<button class="project-nav-item ${project.id === selectedProjectId ? 'active' : ''}" data-project="${esc(project.id)}" ${project.id === selectedProjectId ? 'aria-current="page"' : ''}><span class="project-nav-icon">${project.id === 'p1' ? '✳' : '◈'}</span><span class="project-nav-name">${esc(project.name)}</span><span class="project-nav-count">${tasks.filter((task) => task.projectId === project.id).length}</span></button>`).join('')}
+        </nav>
+        <button class="sidebar-add-project" id="add-project">＋ <span>New project</span></button>
+        <div class="sidebar-footer"><span class="sidebar-footer-mark">✓</span><span>Keep your work<br>moving forward</span></div>
+      </aside>
+
     <main class="workspace">
       <section class="project-header">
         <div>
-          <div class="project-kicker">
-            <span class="project-icon">✳</span>
-            PRODUCT TEAM
-            <span class="slash">/</span>
-            SPRINT 12
-          </div>
+          <div class="project-kicker"><span class="project-icon">✳</span> YOUR PROJECTS</div>
 
-          <h1>
-            My project
-            <span class="project-badge">Active sprint</span>
-          </h1>
+          <h1>${esc(activeProject.name)}</h1>
 
           <p class="project-summary">
-            A little progress each day adds up to big results.
+            ${esc(activeProject.description || 'Tasks and progress for this project.')}
           </p>
         </div>
 
@@ -351,13 +372,13 @@ function render() {
       <div class="board-meta">
         <div class="meta-tabs">
           <span class="meta-tab active">
-            All tasks <b>${tasks.length}</b>
+          All tasks <b>${scopedTasks.length}</b>
           </span>
 
           <span class="meta-tab">
             My tasks
             <b>
-              ${tasks.filter((t) => t.members.includes('m1')).length}
+              ${scopedTasks.filter((t) => t.members.includes('m1')).length}
             </b>
           </span>
 
@@ -365,8 +386,8 @@ function render() {
             Needs attention
             <b class="attention-count">
               ${
-                tasks.filter(
-                  (t) => t.due < dateAfter(0) && t.status !== 'done',
+                scopedTasks.filter(
+                  (t) => t.due < dateAfter(0) && t.status !== 'done' && t.title.toLowerCase().includes(query.toLowerCase()),
                 ).length
               }
             </b>
@@ -403,11 +424,12 @@ function render() {
         </span>
 
         <span>
-          ${tasks.filter((t) => t.status === 'done').length}
-          tasks completed this sprint
+          ${scopedTasks.filter((t) => t.status === 'done').length}
+          tasks completed in this project
         </span>
       </footer>
     </main>
+    </div>
 
     <div id="modal-root"></div>
   `;
@@ -426,22 +448,59 @@ function showModal(content) {
 function escModal(e) {
     if (e.key === 'Escape') closeModal();
 }
+function saveFormDraft(type, metadata, form) {
+    const values = Object.fromEntries(
+        [...new FormData(form)].filter(([name]) => name !== 'members'),
+    );
+    if (form.querySelector('[name="members"]')) {
+        values.members = [...form.querySelectorAll('[name="members"]:checked')].map(
+            (input) => input.value,
+        );
+    }
+    localStorage.setItem(
+        formDraftKey,
+        JSON.stringify({ type, ...metadata, values }),
+    );
+}
+function watchFormDraft(form, type, metadata) {
+    const save = () => saveFormDraft(type, metadata, form);
+    form.addEventListener('input', save);
+    form.addEventListener('change', save);
+    save();
+}
 function closeModal() {
     document.getElementById('modal-root').innerHTML = '';
+    localStorage.removeItem(formDraftKey);
 }
-function taskModal(task = null, status = 'todo') {
+function taskModal(task = null, status = 'todo', draft = null) {
     const editing = !!task;
-    const selectedStatus = task?.status || status;
+    const values = {
+        title: task?.title || '',
+        description: task?.description || '',
+        status: task?.status || status,
+        due: task?.due || '',
+        category: task?.category || 'General',
+        priority: task?.priority || 'Medium',
+        members: task?.members || [],
+        projectId: task?.projectId || selectedProjectId,
+        ...draft?.values,
+    };
+    const selectedStatus = values.status;
+    const assigneeProject = projects.find((project) => project.id === values.projectId);
     showModal(
-        `<form id="task-form" class="modal-form"><div class="modal-heading"><div><p class="eyebrow">${editing ? 'TASK DETAILS' : 'NEW TASK'}</p><h2>${editing ? 'Edit task' : 'Create a task'}</h2></div><button type="button" class="close-button" id="close-modal">×</button></div><label class="field-label">Task name<input name="title" required maxlength="100" placeholder="What needs to get done?" value="${esc(task?.title || '')}"></label><label class="field-label">Description <span class="optional">OPTIONAL</span><textarea name="description" rows="3" placeholder="Add a few details...">${esc(task?.description || '')}</textarea></label><div class="form-row"><label class="field-label">Status<select name="status">${statuses.map((s) => `<option value="${s.id}" ${s.id === selectedStatus ? 'selected' : ''}>${s.label}</option>`).join('')}</select></label><label class="field-label">Due date<input type="date" name="due" value="${esc(task?.due || '')}"></label></div><div class="form-row"><label class="field-label">Category<input name="category" maxlength="24" placeholder="e.g. Design" value="${esc(task?.category || 'General')}"></label><label class="field-label">Priority<select name="priority">${['Low', 'Medium', 'High'].map((p) => `<option ${p === (task?.priority || 'Medium') ? 'selected' : ''}>${p}</option>`).join('')}</select></label></div><fieldset class="assignee-field"><legend>Assignees</legend><div class="assignee-options">${members.map((m) => `<label class="assignee-option"><input type="checkbox" name="members" value="${m.id}" ${(task?.members || []).includes(m.id) ? 'checked' : ''}><span class="assignee-avatar" style="--avatar:${m.color}">${esc(m.initials)}</span><span>${esc(m.name)}</span></label>`).join('') || '<span class="muted">Add a team member first.</span>'}</div></fieldset><div class="modal-actions">${editing ? `<button type="button" class="delete-button" id="delete-task">Delete task</button>` : ''}<button type="button" class="secondary-button" id="cancel-modal">Cancel</button><button class="primary-button" type="submit">${editing ? 'Save changes' : 'Create task'}</button></div></form>`,
+        `<form id="task-form" class="modal-form"><div class="modal-heading"><div><p class="eyebrow">${editing ? 'TASK DETAILS' : 'NEW TASK'}</p><h2>${editing ? 'Edit task' : 'Create a task'}</h2></div><button type="button" class="close-button" id="close-modal">×</button></div><label class="field-label">Task name<input name="title" required maxlength="100" placeholder="What needs to get done?" value="${esc(values.title)}"></label><label class="field-label">Description <span class="optional">OPTIONAL</span><textarea name="description" rows="3" placeholder="Add a few details...">${esc(values.description)}</textarea></label><div class="form-row"><label class="field-label">Status<select name="status">${statuses.map((s) => `<option value="${s.id}" ${s.id === selectedStatus ? 'selected' : ''}>${s.label}</option>`).join('')}</select></label><label class="field-label">Due date<input type="date" name="due" value="${esc(values.due)}"></label></div><div class="form-row"><label class="field-label">Category<input name="category" maxlength="24" placeholder="e.g. Design" value="${esc(values.category)}"></label><label class="field-label">Priority<select name="priority">${['Low', 'Medium', 'High'].map((p) => `<option ${p === values.priority ? 'selected' : ''}>${p}</option>`).join('')}</select></label></div><fieldset class="assignee-field"><legend>Assignees for ${esc(assigneeProject?.name || 'this project')}</legend><div class="assignee-options">${projectMembers(values.projectId).map((m) => `<label class="assignee-option"><input type="checkbox" name="members" value="${m.id}" ${values.members.includes(m.id) ? 'checked' : ''}><span class="assignee-avatar" style="--avatar:${m.color}">${esc(m.initials)}</span><span>${esc(m.name)}</span></label>`).join('') || '<span class="muted">Add a member to this project first.</span>'}</div></fieldset><div class="modal-actions">${editing ? `<button type="button" class="delete-button" id="delete-task">Delete task</button>` : ''}<button type="button" class="secondary-button" id="cancel-modal">Cancel</button><button class="primary-button" type="submit">${editing ? 'Save changes' : 'Create task'}</button></div></form>`,
     );
     document.getElementById('close-modal').onclick = closeModal;
     document.getElementById('cancel-modal').onclick = closeModal;
-    document.getElementById('task-form').onsubmit = (e) => {
+    const form = document.getElementById('task-form');
+    const metadata = { taskId: task?.id || null, status: selectedStatus };
+    watchFormDraft(form, 'task', metadata);
+    form.onsubmit = (e) => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
         const item = {
             id: task?.id || `t${Date.now()}`,
+            projectId: task?.projectId || selectedProjectId,
             title: data.get('title').trim(),
             description: data.get('description').trim(),
             status: data.get('status'),
@@ -467,7 +526,23 @@ function taskModal(task = null, status = 'todo') {
             render();
         };
 }
-function memberModal() {
+function projectModal() {
+    showModal(`<form id="project-form" class="modal-form"><div class="modal-heading"><div><p class="eyebrow">NEW WORKSPACE</p><h2>Create a project</h2></div><button type="button" class="close-button" id="close-modal">×</button></div><label class="field-label">Project name<input name="name" required maxlength="60" placeholder="e.g. Website redesign"></label><label class="field-label">Description <span class="optional">OPTIONAL</span><textarea name="description" rows="3" maxlength="180" placeholder="What is this project about?"></textarea></label><div class="modal-actions"><button type="button" class="secondary-button" id="cancel-modal">Cancel</button><button class="primary-button" type="submit">Create project</button></div></form>`);
+    document.getElementById('close-modal').onclick = closeModal;
+    document.getElementById('cancel-modal').onclick = closeModal;
+    document.getElementById('project-form').onsubmit = (event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const project = { id: `p${Date.now()}`, name: data.get('name').trim(), description: data.get('description').trim(), color: '#7355e9' };
+        projects.push(project);
+        selectedProjectId = project.id;
+        persist();
+        closeModal();
+        render();
+    };
+}
+function memberModal(draft = null) {
+    const values = { name: '', email: '', projectId: selectedProjectId, ...draft?.values };
     showModal(
   `<form id="member-form" class="modal-form">
     <div class="modal-heading">
@@ -480,12 +555,17 @@ function memberModal() {
 
     <label class="field-label">
       Full name
-      <input name="name" required maxlength="60" placeholder="e.g. Taylor Lee">
+      <input name="name" required maxlength="60" placeholder="e.g. Taylor Lee" value="${esc(values.name)}">
     </label>
 
     <label class="field-label">
       Email address
-      <input type="email" name="email" placeholder="taylor@company.com">
+      <input type="email" name="email" placeholder="taylor@company.com" value="${esc(values.email)}">
+    </label>
+
+    <label class="field-label">
+      Add to project
+      <select name="projectId" required>${projects.map((project) => `<option value="${esc(project.id)}" ${project.id === values.projectId ? 'selected' : ''}>${esc(project.name)}</option>`).join('')}</select>
     </label>
 
     <div class="modal-actions">
@@ -496,9 +576,12 @@ function memberModal() {
 );
     document.getElementById('close-modal').onclick = closeModal;
     document.getElementById('cancel-modal').onclick = closeModal;
-    document.getElementById('member-form').onsubmit = (e) => {
+const form = document.getElementById('member-form');
+watchFormDraft(form, 'member', {});
+form.onsubmit = (e) => {
         e.preventDefault();
-        const name = new FormData(e.currentTarget).get('name').trim();
+        const data = new FormData(e.currentTarget);
+        const name = data.get('name').trim();
         const initials = name
             .split(/\s+/)
             .map((x) => x[0])
@@ -509,6 +592,7 @@ function memberModal() {
             id: `m${Date.now()}`,
             name,
             initials,
+            projectIds: [data.get('projectId')],
             color: ['#7657e8', '#e88762', '#39a98b', '#5080df', '#ca6594'][
                 members.length % 5
             ],
@@ -518,12 +602,41 @@ function memberModal() {
         render();
     };
 }
+function restoreFormDraft() {
+    const draft = read(formDraftKey, null);
+    if (!draft) return;
+    if (draft.type === 'member') {
+        memberModal(draft);
+        return;
+    }
+    if (draft.type === 'task') {
+        const task = draft.taskId
+            ? tasks.find((item) => item.id === draft.taskId)
+            : null;
+        if (draft.taskId && !task) {
+            localStorage.removeItem(formDraftKey);
+            return;
+        }
+        taskModal(task, draft.status || 'todo', draft);
+        return;
+    }
+    localStorage.removeItem(formDraftKey);
+}
 function wire() {
+    document.querySelectorAll('[data-project]').forEach((button) => {
+        button.onclick = () => {
+            selectedProjectId = button.dataset.project;
+            persist();
+            render();
+        };
+    });
+    document.getElementById('add-project').onclick = projectModal;
     document.querySelectorAll('[data-view]').forEach(
         (button) =>
         (button.onclick = () => {
             view = button.dataset.view;
             render();
+            restoreFormDraft();
         }),
     );
     document.getElementById('add-task').onclick = () => taskModal();
@@ -576,11 +689,17 @@ function wire() {
             const member = members.find(
                 (m) => m.id === button.dataset.memberDelete,
             );
-            if (!confirm(`Remove ${member.name} from the team?`)) return;
-            members = members.filter((m) => m.id !== member.id);
+            if (!confirm(`Remove ${member.name} from ${currentProject().name}?`)) return;
+            const remainingProjectIds = member.projectIds.filter((id) => id !== selectedProjectId);
+            const deleteMember = remainingProjectIds.length === 0;
+            members = deleteMember
+                ? members.filter((m) => m.id !== member.id)
+                : members.map((m) => m.id === member.id ? { ...m, projectIds: remainingProjectIds } : m);
             tasks = tasks.map((t) => ({
                 ...t,
-                members: t.members.filter((id) => id !== member.id),
+                members: t.projectId === selectedProjectId || deleteMember
+                    ? t.members.filter((id) => id !== member.id)
+                    : t.members,
             }));
             persist();
             render();

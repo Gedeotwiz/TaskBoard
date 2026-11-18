@@ -191,6 +191,159 @@ select:focus-visible {
   padding: 20px max(calc((100vw - 1500px) / 2), 4vw);
 }
 
+.app-layout {
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+  align-items: start;
+  min-height: calc(100vh - 76px);
+}
+
+.app-layout > .workspace { padding: 24px clamp(24px, 3vw, 48px); }
+
+.project-sidebar {
+  position: sticky;
+  top: 76px;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 76px);
+  height: calc(100vh - 76px);
+  padding: 26px 15px 16px;
+  background: #fff;
+  border-right: 1px solid #ececf3;
+}
+
+.sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  color: #747487;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.sidebar-project-count {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #f2f0fa;
+  color: #77708e;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.sidebar-section-label {
+  margin: 28px 10px 9px;
+  color: #a2a2b0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+}
+
+.project-list {
+  display: grid;
+  gap: 4px;
+  max-height: calc(100vh - 225px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.project-nav-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #68687c;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.project-nav-item:hover { background: #f7f6fb; color: #49445d; }
+
+.project-nav-item.active {
+  background: #f0edff;
+  color: #5e45c7;
+  font-weight: 600;
+}
+
+.project-nav-icon {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  flex: none;
+  border-radius: 8px;
+  background: #f2f1f7;
+  color: #858399;
+  font-size: 13px;
+}
+
+.project-nav-item.active .project-nav-icon { background: #ded7ff; color: #7355e9; }
+
+.project-nav-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.project-nav-count {
+  margin-left: auto;
+  padding-left: 5px;
+  color: #a1a0ae;
+  font-size: 10px;
+}
+
+.project-nav-item.active .project-nav-count { color: #7769b3; }
+
+.sidebar-add-project {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 10px 2px 0;
+  padding: 9px 10px;
+  border: 1px dashed #d8d5e5;
+  border-radius: 9px;
+  background: transparent;
+  color: #77758a;
+  text-align: left;
+  font-size: 12px;
+}
+
+.sidebar-add-project:hover { border-color: #ad9eef; background: #faf9ff; color: var(--purple); }
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding: 14px 10px 2px;
+  border-top: 1px solid #f0eff4;
+  color: #9b9aaa;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.sidebar-footer-mark {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
+  background: #f0edff;
+  color: #7355e9;
+  font-weight: 700;
+}
+
 .project-header {
   display: flex;
   align-items: flex-end;
@@ -1171,6 +1324,10 @@ select:focus-visible {
 }
 
 @media (max-width: 900px) {
+  .app-layout { grid-template-columns: 220px minmax(0, 1fr); }
+
+  .project-sidebar { padding-right: 11px; padding-left: 11px; }
+
   .topbar {
     gap: 11px;
     padding: 0 3vw;
@@ -1229,6 +1386,55 @@ select:focus-visible {
 }
 
 @media (max-width: 640px) {
+  .app-layout { display: block; min-height: 0; }
+
+  .project-sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    padding: 11px 4vw;
+    border-right: 0;
+    border-bottom: 1px solid #ececf3;
+  }
+
+  .sidebar-heading,
+  .sidebar-section-label,
+  .sidebar-footer { display: none; }
+
+  .project-list {
+    display: flex;
+    min-width: 0;
+    gap: 6px;
+    max-height: none;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .project-nav-item {
+    width: auto;
+    max-width: 190px;
+    flex: 0 0 auto;
+    padding: 6px 9px 6px 6px;
+    background: #f4f3f8;
+  }
+
+  .project-nav-item.active { background: #f0edff; }
+
+  .project-nav-icon { width: 25px; height: 25px; }
+
+  .sidebar-add-project {
+    align-self: center;
+    margin: 0;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  .app-layout > .workspace { padding: 22px 4vw; }
+
   .topbar {
     height: auto;
     min-height: 65px;
@@ -1292,6 +1498,8 @@ select:focus-visible {
 
   .project-header h1 {
     font-size: 25px;
+    width: 100%;
+    gap: 8px;
   }
 
   .header-actions {

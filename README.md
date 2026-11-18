@@ -11,6 +11,7 @@ TaskBoard is a lightweight project planning app for organizing tasks and a small
 - Search tasks by title or category; cycle through priority filters and sort orders.
 - Add and remove team members.
 - Save tasks and members in browser `localStorage` between visits.
+- Keep unfinished add-task, edit-task, and add-member forms open with their entered values after a page refresh.
 
 The app starts with sample tasks and team members. Data is stored per browser and is not synced between devices.
 
@@ -49,4 +50,3 @@ The deploy script builds the project and publishes `dist/` using `gh-pages`. The
 - CSS
 - Webpack and Webpack Dev Server
 - Browser `localStorage`
-
