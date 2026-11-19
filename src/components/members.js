@@ -1,5 +1,6 @@
 import { projectMembers, projectTasks } from '../data/store.js';
 import { avatar, esc } from '../utils.js';
+import { MEMBER_API_URL } from '../data/store.js';
 
 export function renderMembers() {
   const tasks = projectTasks();

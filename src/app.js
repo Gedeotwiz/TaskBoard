@@ -1,4 +1,10 @@
-import { currentProject, persist, state } from './data/store.js';
+import {
+  currentProject,
+  MEMBER_API_URL,
+  persist,
+  state,
+  TASKS_API_URL,
+} from './data/store.js';
 import { renderAppView } from './components/appView.js';
 import { renderBoard } from './components/board.js';
 import { renderCalendar } from './components/calendar.js';
@@ -173,11 +179,25 @@ function wire() {
       event.preventDefault();
       column.classList.remove('drop-target');
       const taskId = event.dataTransfer.getData('text/plain');
-      state.tasks = state.tasks.map((task) =>
-        task.id === taskId ? { ...task, status: column.dataset.status } : task,
-      );
-      persist();
-      render();
+      const task = state.tasks.find((item) => String(item.id) === taskId);
+      if (!task) return;
+      const updatedTask = { ...task, status: column.dataset.status };
+      fetch(`${TASKS_API_URL}/${encodeURIComponent(task.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedTask),
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error(`Request failed (${response.status})`);
+          state.tasks = state.tasks.map((item) =>
+            item.id === task.id ? updatedTask : item,
+          );
+          render();
+        })
+        .catch((error) => {
+          console.error('Error updating task status:', error);
+          showToast('Could not move task. Please try again.');
+        });
     };
   });
 
@@ -191,6 +211,50 @@ function wire() {
 }
 
 export function startApp() {
-  render();
-  restoreFormDraft();
+  Promise.all([
+    fetch(TASKS_API_URL).then((response) => {
+      if (!response.ok) throw new Error(`Tasks request failed (${response.status})`);
+      return response.json();
+    }),
+    fetch(MEMBER_API_URL).then((response) => {
+      if (!response.ok) throw new Error(`Members request failed (${response.status})`);
+      return response.json();
+    }),
+  ])
+    .then(([taskResult, memberResult]) => {
+      const tasks = taskResult.tasks || taskResult.data || taskResult;
+      const members = memberResult.members || memberResult.data || memberResult;
+      if (!Array.isArray(tasks)) throw new Error('Unexpected tasks response');
+      if (!Array.isArray(members)) throw new Error('Unexpected members response');
+
+      state.tasks = tasks.map((task) => ({
+        ...task,
+        projectId: task.projectId || state.projects[0].id,
+        members: task.members || [],
+        subtasks: task.subtasks || 0,
+        done: task.done || 0,
+      }));
+      state.members = members.map((member) => ({
+        ...member,
+        initials:
+          member.initials ||
+          member.name
+            .split(/\s+/)
+            .map((part) => part[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase(),
+        color: member.color || '#7657e8',
+        projectIds:
+          member.projectIds ||
+          (member.projectId ? [member.projectId] : state.projects.map((project) => project.id)),
+      }));
+      render();
+      restoreFormDraft();
+    })
+    .catch((error) => {
+      console.error('Error loading tasks:', error);
+      render();
+      showToast('Could not load tasks from the server.');
+    });
 }
